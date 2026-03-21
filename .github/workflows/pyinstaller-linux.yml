@@ -8,7 +8,7 @@ jobs:
   pyinstaller-linux:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       # We shouldn't use actions/setup-python since PyGObject is compiled against the system Python
       - name: Install System Dependencies
         uses: awalsh128/cache-apt-pkgs-action@latest
@@ -24,7 +24,7 @@ jobs:
         run: LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu pyinstaller yafi.spec -- --onefile
         working-directory: pyinstaller
       - name: Upload PyInstaller Artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           path: pyinstaller/dist/YAFI
           name: yafi-linux-${{ github.sha }}
