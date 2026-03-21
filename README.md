@@ -25,8 +25,6 @@ If your Laptop's BIOS supports Framework's EC driver, there is no need to instal
 
 Otherwise, YAFI supports the [PawnIO](https://pawnio.eu/) driver, and will be automatically used if installed and there is no Framework driver available. YAFI will need to be run as administrator to communicate with the driver.
 
-Currently the PawnIO driver does not support Framework 13 mainboards with 11th, 12th, or 13th Gen Intel CPUs.
-
 ## Building
 
 ### Flatpak

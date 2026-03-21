@@ -88,6 +88,18 @@
   </screenshots>
 
   <releases>
+    <release version="1.0" date="2026-03-21">
+      <url type="details">https://github.com/Steve-Tech/YAFI/releases/tag/1.0</url>
+      <description>
+        <p>The following changes have been made:</p>
+        <ul>
+          <li>New logo matching the GNOME style!</li>
+          <li>Errored temperature sensors will now show as 'Error'.</li>
+          <li>Fix for battery page when battery isn't present.</li>
+          <li>Fix some minor UI bugs.</li>
+        </ul>
+      </description>
+    </release>
     <release version="0.7" date="2025-12-25">
       <url type="details">https://github.com/Steve-Tech/YAFI/releases/tag/0.7</url>
       <description>

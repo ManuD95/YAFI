@@ -139,13 +139,13 @@ class YafiApplication(Adw.Application):
             comments="YAFI is another GUI for the Framework Laptop Embedded Controller.\n\n"
             + "It is written in Python with a GTK4 Adwaita theme, and uses the CrOS_EC_Python library to communicate with the EC.\n\n"
             + "YAFI is not affiliated with Framework Computer Inc. in any way.",
-            copyright="© 2025 Stephen Horvath",
+            copyright="© 2026 Stephen Horvath",
             developer_name="Stephen Horvath",
             developers=["Stephen Horvath https://github.com/Steve-Tech"],
             artists=["Mirabelle SALLES https://github.com/oiimrosabel"],
             issue_url="https://github.com/Steve-Tech/YAFI/issues",
             license_type=Gtk.License.GPL_2_0,
-            version="0.7",
+            version="1.0",
             website="https://github.com/Steve-Tech/YAFI",
         )
         about.add_acknowledgement_section(None, ["Framework Computer Inc. https://frame.work/"])
