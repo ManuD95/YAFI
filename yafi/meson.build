@@ -31,6 +31,7 @@ yafi_sources = [
   'main.py',
   'window.py',
   'thermals.py',
+  'fan_curve.py',
   'leds.py',
   'battery.py',
   'battery_limiter.py',

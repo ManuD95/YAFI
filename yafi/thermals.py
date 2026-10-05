@@ -23,6 +23,8 @@ from gi.repository import Gtk, Adw, GLib
 import cros_ec_python.commands as ec_commands
 import cros_ec_python.exceptions as ec_exceptions
 
+from . import fan_curve
+
 @Gtk.Template(resource_path='/au/stevetech/yafi/ui/thermals.ui')
 class ThermalsPage(Gtk.Box):
     __gtype_name__ = 'ThermalsPage'
@@ -153,6 +155,36 @@ class ThermalsPage(Gtk.Box):
                     app.cros_ec, index,
                     self.ec_set_points[index]
                 )
+                if boot_row.get_active():
+                    fan_curve.save(self.ec_set_points)
+
+            # The EC forgets the set points when it resets, so offer to restore them
+            boot_subtitle = "Restore these set points on login"
+            boot_row = Adw.SwitchRow(title="Apply on Boot", subtitle=boot_subtitle)
+            if fan_curve.autostart_supported():
+                boot_row.set_active(fan_curve.autostart_enabled())
+            else:
+                boot_row.set_sensitive(False)
+                boot_row.set_subtitle("Not supported in Flatpak")
+
+            def handle_apply_on_boot(switch):
+                active = switch.get_active()
+                try:
+                    if active:
+                        fan_curve.save(self.ec_set_points)
+                    fan_curve.set_autostart(active)
+                    switch.set_subtitle(boot_subtitle)
+                except Exception as e:
+                    switch.set_subtitle(str(e))
+                    # Revert the switch without running this handler again
+                    switch.handler_block(boot_handler)
+                    switch.set_active(not active)
+                    switch.handler_unblock(boot_handler)
+
+            boot_handler = boot_row.connect(
+                "notify::active", lambda switch, _: handle_apply_on_boot(switch)
+            )
+            self.fan_set_points.add_row(boot_row)
 
             for i, sensor in enumerate(ec_temp_sensors):
                 ec_set_point = ec_commands.thermal.thermal_get_thresholds(app.cros_ec, i)

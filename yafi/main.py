@@ -34,6 +34,7 @@ from .leds import LedsPage
 from .battery import BatteryPage
 from .battery_limiter import BatteryLimiterPage
 from .hardware import HardwarePage
+from . import fan_curve
 
 from cros_ec_python import get_cros_ec
 
@@ -256,5 +257,8 @@ class YafiApplication(Adw.Application):
 
 def main():
     """The application's entry point."""
+    if fan_curve.APPLY_ARG in sys.argv:
+        return fan_curve.run()
+
     app = YafiApplication()
     return app.run(sys.argv)

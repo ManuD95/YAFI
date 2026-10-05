@@ -25,6 +25,12 @@ If your Laptop's BIOS supports Framework's EC driver, there is no need to instal
 
 Otherwise, YAFI supports the [PawnIO](https://pawnio.eu/) driver, and will be automatically used if installed and there is no Framework driver available. YAFI will need to be run as administrator to communicate with the driver.
 
+## Fan Set Points on Boot
+
+The EC forgets custom fan set points when it resets. Enabling "Apply on Boot" under "Fan Set Points" saves them, and re-applies them on login by running `yafi --apply-fan-curve` in the background.
+
+On Windows this uses a scheduled task if YAFI is running as administrator (needed for PawnIO), otherwise a startup registry entry. On Linux it uses an XDG autostart entry, which is not available in the Flatpak build.
+
 ## Building
 
 ### Flatpak
