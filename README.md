@@ -31,6 +31,8 @@ The EC forgets custom fan set points when it resets. Enabling "Apply on Boot" un
 
 On Windows this uses a scheduled task if YAFI is running as administrator (needed for PawnIO), otherwise a startup registry entry. On Linux it uses an XDG autostart entry, which is not available in the Flatpak build.
 
+On Windows, use the ZIP build rather than the standalone `.exe` for this. The standalone build unpacks itself and shows a splash screen every time it starts, which can take a long time during login.
+
 ## Building
 
 ### Flatpak
