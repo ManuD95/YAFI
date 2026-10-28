@@ -123,9 +123,33 @@ def autostart_supported():
 
 
 def autostart_enabled():
+    return _registered_command() is not None
+
+
+def autostart_outdated():
+    """Whether autostart runs a different command to this one, e.g. YAFI was moved."""
+    registered = _registered_command()
+    return registered is not None and registered != _command_line()
+
+
+def _command_line():
     if sys.platform == "win32":
-        return _win_task_exists() or _win_run_key_exists()
-    return os.path.exists(_xdg_autostart_path())
+        return subprocess.list2cmdline(_command())
+    return " ".join(_xdg_quote(arg) for arg in _command())
+
+
+def _registered_command():
+    """The command line autostart runs, or None if it isn't enabled."""
+    if sys.platform == "win32":
+        return _win_task_command() or _win_run_key_command()
+    try:
+        with open(_xdg_autostart_path(), "r") as f:
+            for line in f:
+                if line.startswith("Exec="):
+                    return line[len("Exec="):].strip()
+    except FileNotFoundError:
+        return None
+    return ""
 
 
 def set_autostart(enabled):
@@ -139,7 +163,7 @@ def set_autostart(enabled):
                 "[Desktop Entry]\n"
                 "Type=Application\n"
                 f"Name={AUTOSTART_NAME}\n"
-                f"Exec={' '.join(_xdg_quote(arg) for arg in _command())}\n"
+                f"Exec={_command_line()}\n"
                 "NoDisplay=true\n"
             )
     elif os.path.exists(_xdg_autostart_path()):
@@ -213,14 +237,43 @@ def _win_task_exists():
     return _win_schtasks("/Query", "/TN", AUTOSTART_NAME).returncode == 0
 
 
-def _win_run_key_exists():
+def _win_task_command():
+    import xml.etree.ElementTree as ET
+
+    result = _win_schtasks("/Query", "/TN", AUTOSTART_NAME, "/XML")
+    if result.returncode != 0:
+        return None
+    # Drop the declaration, as it claims UTF-16 but this is already decoded
+    xml = result.stdout[result.stdout.find("<Task"):]
+    ns = {"t": "http://schemas.microsoft.com/windows/2004/02/mit/task"}
+    try:
+        exec_node = ET.fromstring(xml).find("t:Actions/t:Exec", ns)
+    except ET.ParseError:
+        return ""
+    if exec_node is None:
+        return ""
+    command = exec_node.findtext("t:Command", "", ns)
+    arguments = exec_node.findtext("t:Arguments", "", ns)
+    return f"{subprocess.list2cmdline([command])} {arguments}".strip()
+
+
+def _win_run_key_command():
     import winreg
     try:
         with winreg.OpenKey(winreg.HKEY_CURRENT_USER, WIN_RUN_KEY) as key:
-            winreg.QueryValueEx(key, AUTOSTART_NAME)
-        return True
+            return winreg.QueryValueEx(key, AUTOSTART_NAME)[0]
     except FileNotFoundError:
-        return False
+        return None
+
+
+def _win_run_key_exists():
+    return _win_run_key_command() is not None
+
+
+def _win_delete_run_key():
+    import winreg
+    with winreg.OpenKey(winreg.HKEY_CURRENT_USER, WIN_RUN_KEY, 0, winreg.KEY_SET_VALUE) as key:
+        winreg.DeleteValue(key, AUTOSTART_NAME)
 
 
 def _win_set_autostart(enabled):
@@ -235,8 +288,7 @@ def _win_set_autostart(enabled):
             if result.returncode != 0:
                 raise OSError(result.stderr.strip() or "Could not delete the scheduled task")
         if _win_run_key_exists():
-            with winreg.OpenKey(winreg.HKEY_CURRENT_USER, WIN_RUN_KEY, 0, winreg.KEY_SET_VALUE) as key:
-                winreg.DeleteValue(key, AUTOSTART_NAME)
+            _win_delete_run_key()
     elif ctypes.windll.shell32.IsUserAnAdmin():
         # Running as admin means the EC driver likely needs it (e.g. PawnIO),
         # only a scheduled task can start elevated without a UAC prompt.
@@ -254,6 +306,9 @@ def _win_set_autostart(enabled):
             os.remove(xml_path)
         if result.returncode != 0:
             raise OSError(result.stderr.strip() or "Could not create the scheduled task")
+        # Don't leave an older startup entry running alongside the task
+        if _win_run_key_exists():
+            _win_delete_run_key()
     else:
         with winreg.OpenKey(winreg.HKEY_CURRENT_USER, WIN_RUN_KEY, 0, winreg.KEY_SET_VALUE) as key:
             winreg.SetValueEx(key, AUTOSTART_NAME, 0, winreg.REG_SZ, subprocess.list2cmdline(command))

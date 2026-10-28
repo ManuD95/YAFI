@@ -163,6 +163,12 @@ class ThermalsPage(Gtk.Box):
             boot_row = Adw.SwitchRow(title="Apply on Boot", subtitle=boot_subtitle)
             if fan_curve.autostart_supported():
                 boot_row.set_active(fan_curve.autostart_enabled())
+                # Point autostart at this copy of YAFI if it was moved or updated
+                if fan_curve.autostart_outdated():
+                    try:
+                        fan_curve.set_autostart(True)
+                    except Exception as e:
+                        boot_row.set_subtitle(f"Could not update startup entry: {e}")
             else:
                 boot_row.set_sensitive(False)
                 boot_row.set_subtitle("Not supported in Flatpak")
