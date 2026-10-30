@@ -55,8 +55,8 @@ def save(set_points):
         json.dump({"set_points": data}, f, indent=2)
 
 
-def load():
-    with open(config_path(), "r") as f:
+def load(path=None):
+    with open(path or config_path(), "r") as f:
         set_points = json.load(f)["set_points"]
     for point in set_points:
         for key in SET_POINT_KEYS:
@@ -67,12 +67,12 @@ def load():
     return set_points
 
 
-def apply(ec):
+def apply(ec, path=None):
     """Apply the saved set points to the EC, returns the number of sensors set."""
     import cros_ec_python.commands as ec_commands
 
     count = 0
-    for i, point in enumerate(load()):
+    for i, point in enumerate(load(path)):
         # Only the fan temps are restored, the host thresholds are left to the EC
         thresholds = ec_commands.thermal.thermal_get_thresholds(ec, i)
         thresholds.update(point)
@@ -81,13 +81,26 @@ def apply(ec):
     return count
 
 
+def _log(path, message):
+    # There's no window or console on boot, so this is the only way to see failures
+    try:
+        with open(os.path.join(os.path.dirname(path), "fan_curve.log"), "a") as f:
+            f.write(f"{time.strftime('%Y-%m-%d %H:%M:%S')} {message}\n")
+    except OSError:
+        pass
+
+
 def run():
-    """Entry point for `yafi --apply-fan-curve`."""
+    """Entry point for `yafi --apply-fan-curve [config path]`."""
     if getattr(sys, "frozen", False) and "_PYI_SPLASH_IPC" in os.environ:
         import pyi_splash
         pyi_splash.close()
 
     from cros_ec_python import get_cros_ec
+
+    # The startup task runs as SYSTEM, so it can't work out the user's config path
+    args = sys.argv[sys.argv.index(APPLY_ARG) + 1:] if APPLY_ARG in sys.argv else []
+    path = args[0] if args else config_path()
 
     try:
         for attempt in range(EC_RETRIES):
@@ -98,23 +111,25 @@ def run():
                 if attempt == EC_RETRIES - 1:
                     raise
                 time.sleep(EC_RETRY_DELAY)
-        apply(ec)
+        count = apply(ec, path)
     except Exception:
+        _log(path, f"Failed:\n{traceback.format_exc()}")
         traceback.print_exc()
         return 1
+    _log(path, f"Applied set points for {count} sensors")
     return 0
 
 
 def _command():
     if getattr(sys, "frozen", False):
-        return [sys.executable, APPLY_ARG]
+        return [sys.executable, APPLY_ARG, config_path()]
     executable = sys.executable
     if sys.platform == "win32":
         # Avoid a console window popping up on login
         pythonw = os.path.join(os.path.dirname(executable), "pythonw.exe")
         if os.path.exists(pythonw):
             executable = pythonw
-    return [executable, "-m", "yafi", APPLY_ARG]
+    return [executable, "-m", "yafi", APPLY_ARG, config_path()]
 
 
 def autostart_supported():
@@ -194,15 +209,16 @@ WIN_TASK_XML = """<?xml version="1.0" encoding="UTF-16"?>
     <Description>Applies the fan set points saved in YAFI</Description>
   </RegistrationInfo>
   <Triggers>
+    <BootTrigger>
+      <Enabled>true</Enabled>
+    </BootTrigger>
     <LogonTrigger>
       <Enabled>true</Enabled>
-      <UserId>{user}</UserId>
     </LogonTrigger>
   </Triggers>
   <Principals>
     <Principal id="Author">
-      <UserId>{user}</UserId>
-      <LogonType>InteractiveToken</LogonType>
+      <UserId>S-1-5-18</UserId>
       <RunLevel>HighestAvailable</RunLevel>
     </Principal>
   </Principals>
@@ -229,6 +245,7 @@ def _win_schtasks(*args):
         ["schtasks", *args],
         capture_output=True,
         text=True,
+        errors="replace",
         creationflags=subprocess.CREATE_NO_WINDOW,
     )
 
@@ -293,10 +310,12 @@ def _win_set_autostart(enabled):
         # Running as admin means the EC driver likely needs it (e.g. PawnIO),
         # only a scheduled task can start elevated without a UAC prompt.
         xml = WIN_TASK_XML.format(
-            user=escape(f"{os.environ['USERDOMAIN']}\\{os.environ['USERNAME']}"),
             command=escape(command[0]),
             arguments=escape(subprocess.list2cmdline(command[1:])),
         )
+        # Replace it completely, rather than updating a possibly broken task
+        if _win_task_exists():
+            _win_schtasks("/Delete", "/TN", AUTOSTART_NAME, "/F")
         fd, xml_path = tempfile.mkstemp(suffix=".xml")
         try:
             with os.fdopen(fd, "w", encoding="utf-16") as f:
@@ -306,6 +325,10 @@ def _win_set_autostart(enabled):
             os.remove(xml_path)
         if result.returncode != 0:
             raise OSError(result.stderr.strip() or "Could not create the scheduled task")
+        # Make sure it can actually start now, instead of finding out on boot
+        result = _win_schtasks("/Run", "/TN", AUTOSTART_NAME)
+        if result.returncode != 0:
+            raise OSError(result.stderr.strip() or "Could not start the scheduled task")
         # Don't leave an older startup entry running alongside the task
         if _win_run_key_exists():
             _win_delete_run_key()

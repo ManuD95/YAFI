@@ -169,6 +169,13 @@ class ThermalsPage(Gtk.Box):
                         fan_curve.set_autostart(True)
                     except Exception as e:
                         boot_row.set_subtitle(f"Could not update startup entry: {e}")
+                # Restore the saved set points in case they weren't applied on boot,
+                # otherwise changing one would save the EC's defaults over the others
+                if boot_row.get_active():
+                    try:
+                        fan_curve.apply(app.cros_ec)
+                    except Exception as e:
+                        boot_row.set_subtitle(f"Could not restore set points: {e}")
             else:
                 boot_row.set_sensitive(False)
                 boot_row.set_subtitle("Not supported in Flatpak")
